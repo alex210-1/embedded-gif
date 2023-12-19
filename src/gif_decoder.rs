@@ -3,31 +3,37 @@ use crate::frame_decoder::{
 };
 use crate::renderer::ImageRenderer;
 use crate::{gif_error::Error, util::color565_from_rgb};
-use core::cell::OnceCell;
 use core::{str::from_utf8, usize};
 
 pub const MAX_SIZE: u16 = 360;
 pub const REVERSE_BUF_LEN: usize = 512; // depends on MaxSize
-pub const OUT_BUF_LEN: usize = 1 << 13;
+pub const OUT_BUF_LEN: usize = 240 * 20; // 20 lines
 
 #[derive(Clone)]
 pub struct GifFileMetadata {
     width: u16,
     height: u16,
     global_color_table_size: u8,
-    background_color_index: u8,
+    background_color_index: u8, // TODO implement
     has_global_color_table: bool,
 }
 
-struct GifDecoder<'a, DS, R> {
+/// Streaming GIF Decoder.
+/// Takes an iterator that serves the bytes of a GIF file as intput,
+/// emits the resulting image in bursts of lines.
+/// Works completely allocationless, needs about 20kiB for the decoding tables.
+///
+/// Usage: Construct with a data source and a renderer. Call parse_gif_metadata().
+/// Then for each frame call parse_frame_metadata() followed by decode_frame_image().
+pub struct GifDecoder<'a, DS, R> {
     data_source: DS,
-    file_metadata: OnceCell<GifFileMetadata>,
+    file_metadata: Option<GifFileMetadata>,
     current_frame_metadata: Option<GifFrameMetadata>,
-    renderer: &'a R,
+    renderer: &'a mut R,
     global_color_table: [u16; 256],
     current_local_color_table: [u16; 256],
     lzw_table: [LzwEntry; 4096],
-    reverse_buffer: [u16; REVERSE_BUF_LEN],
+    reverse_buffer: [u8; REVERSE_BUF_LEN],
     output_buffer: [u8; OUT_BUF_LEN],
 }
 
@@ -38,10 +44,10 @@ where
     DS: Iterator<Item = u8>,
     R: ImageRenderer,
 {
-    pub fn new(data_source: DS, renderer: &'a R) -> Self {
+    pub fn new(data_source: DS, renderer: &'a mut R) -> Self {
         GifDecoder {
             data_source,
-            file_metadata: OnceCell::new(),
+            file_metadata: None,
             current_frame_metadata: None,
             renderer,
 
@@ -106,7 +112,6 @@ where
         Ok(())
     }
 
-    // TODO deduplicate. find way to please borrow checker
     fn parse_local_color_table(&mut self, size: u8) -> Result<(), Error> {
         for i in 0..size {
             let r = self.next_byte()?;
@@ -118,6 +123,7 @@ where
         Ok(())
     }
 
+    /// Parses and consumes the initial metadata section of a GIF file
     pub fn parse_gif_metadata(&mut self) -> Result<(), Error> {
         self.validate_header()?;
         let metadata = self.parse_logical_screen_descriptor()?;
@@ -128,13 +134,13 @@ where
         if metadata.has_global_color_table {
             self.parse_global_color_table(metadata.global_color_table_size)?;
         }
-        self.file_metadata.set(metadata);
+        self.file_metadata = Some(metadata);
 
         Ok(())
     }
 
     pub fn get_gif_metadata(&self) -> Option<&GifFileMetadata> {
-        self.file_metadata.get()
+        self.file_metadata.as_ref()
     }
 
     // === parse frame ===
@@ -194,6 +200,9 @@ where
         })
     }
 
+    /// Parses and consumes the metadata section of the next frame, including all
+    /// GIF extensions up until the actual image data.
+    /// Resturns Err(Error::GifEnded) when there is no frame left
     pub fn parse_frame_metadata(&mut self) -> Result<(), Error> {
         let mut extension: Option<GraphicsControlExtension> = None;
 
@@ -240,6 +249,9 @@ where
         }
     }
 
+    /// Decodes and consumes the image data of the frame.
+    /// Calls renderer.write_area() whenever the output buffer is full.
+    /// Calls renderer.flush_frame() when all images data has been written.
     pub fn decode_frame_image(&mut self) -> Result<(), Error> {
         // == construct frame decoder ==
         let initial_lzw_size = self.next_byte()?;

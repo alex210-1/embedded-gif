@@ -1,8 +1,8 @@
 #![no_std]
 #![feature(iter_next_chunk)]
 
-mod frame_decoder;
-mod gif_decoder;
-mod gif_error;
-mod renderer;
-mod util;
+pub mod frame_decoder;
+pub mod gif_decoder;
+pub mod gif_error;
+pub mod renderer;
+pub mod util;

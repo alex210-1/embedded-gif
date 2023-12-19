@@ -6,4 +6,7 @@ pub enum Error {
     InvalidBlockintroducer,
     InterlacingNotSupported,
     GifEnded,
+    InvalidSymbol,
+    DecoderAlreadyFinished,
+    ReverseBufferOverflow,
 }
