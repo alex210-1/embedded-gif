@@ -1,37 +1,25 @@
-use embedded_gif::gif_decoder::GifDecoder;
+use embedded_gif::gif_error::Error;
 use embedded_gif::renderer::ImageRenderer;
-use std::{fs::File, io::BufReader};
+use embedded_gif::{frame_decoder::ImageArea, gif_decoder::GifDecoder};
+use image::{ImageBuffer, Rgba};
+use std::fs::create_dir;
+use std::fs::read;
+use std::fs::remove_dir_all;
 
 const SCREEN_SIZE: usize = 240;
 
-#[derive(Clone, Copy)]
-struct RGBA {
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
-}
-
-impl Default for RGBA {
-    fn default() -> Self {
-        Self {
-            r: 0,
-            g: 0,
-            b: 0,
-            a: 0,
-        }
-    }
-}
-
 struct TestRenderer {
-    screen: [[RGBA; SCREEN_SIZE]; SCREEN_SIZE],
+    screen: ImageBuffer<Rgba<u8>, Vec<u8>>,
     current_frame: usize,
 }
 
 impl TestRenderer {
     fn new() -> Self {
+        let mut screen = ImageBuffer::new(SCREEN_SIZE as u32, SCREEN_SIZE as u32);
+        screen.fill(0);
+
         Self {
-            screen: [[RGBA::default(); SCREEN_SIZE]; SCREEN_SIZE],
+            screen,
             current_frame: 0,
         }
     }
@@ -40,11 +28,11 @@ impl TestRenderer {
 impl ImageRenderer for TestRenderer {
     fn write_area(
         &mut self,
-        area: embedded_gif::frame_decoder::ImageArea,
+        area: ImageArea,
         buffer: &[u8],
         color_table: &[u16; 256],
         transparency_index: Option<u8>,
-    ) -> Result<(), embedded_gif::gif_error::Error> {
+    ) -> Result<(), Error> {
         let mut buf_index = 0;
 
         for y in area.ypos..(area.ypos + area.height) {
@@ -63,21 +51,45 @@ impl ImageRenderer for TestRenderer {
                 };
 
                 if (x as usize) < SCREEN_SIZE && (y as usize) < SCREEN_SIZE {
-                    let rgba = RGBA { r, g, b, a };
-                    self.screen[SCREEN_SIZE - y as usize - 1][x as usize] = rgba;
+                    let pixel = Rgba([r, g, b, a]);
+
+                    self.screen.put_pixel(x as u32, y as u32, pixel);
                 }
             }
         }
         Ok(())
     }
 
-    fn flush_frame(&mut self) -> Result<(), embedded_gif::gif_error::Error> {
-        todo!()
+    fn flush_frame(&mut self) -> Result<(), Error> {
+        self.screen
+            .save(format!("./tests/frames/frame_{}.png", self.current_frame))
+            .or(Err(Error::RenderError))?;
+
+        self.current_frame += 1;
+        self.screen.fill(0);
+        Ok(())
     }
 }
 
 #[test]
 fn gif_test() {
-    let gif_file = File::open("./test/gifs/test_small.gif");
-    let reader = BufReader::new(gif_file.unwrap());
+    let _ = remove_dir_all("./tests/frames");
+    create_dir("./tests/frames").unwrap();
+
+    let bytes = read("./tests/gifs/test_large.gif").unwrap();
+
+    let data_source = bytes.into_iter();
+    let mut renderer = TestRenderer::new();
+
+    let mut decoder = GifDecoder::new(data_source, &mut renderer);
+
+    decoder.parse_gif_metadata().unwrap();
+
+    loop {
+        match decoder.parse_frame_metadata() {
+            Ok(()) => decoder.decode_frame_image().unwrap(),
+            Err(Error::GifEnded) => break,
+            err => err.unwrap(),
+        }
+    }
 }

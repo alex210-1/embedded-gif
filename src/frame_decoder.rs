@@ -18,7 +18,7 @@ pub struct GraphicsControlExtension {
 
 pub struct GifFrameMetadata {
     pub frame_area: ImageArea,
-    pub local_color_table_size: u8,
+    pub local_color_table_size: usize,
     pub has_local_color_table: bool,
     pub extension: Option<GraphicsControlExtension>,
 }
@@ -31,6 +31,9 @@ pub struct LzwEntry {
     last: u8,
 }
 
+/// Decodes a single frame of a GIF file using LZW compression
+// a 2-12 bit input token is reffered to as a symbol,
+// an lzw table entry containing a pair of symbols is caled an entry
 pub struct FrameDecoder<'a, DS, R> {
     // initial state
     data_source: &'a mut DS,
@@ -131,6 +134,7 @@ where
     /// takes a single byte from the file and extracts the varibale-width symbols
     fn process_byte(&mut self, byte: u8) -> Result<(), Error> {
         self.bit_buffer = self.bit_buffer >> 8 | (byte as u32) << 24;
+        self.bit_count += 8;
 
         while self.current_symbol_size <= self.bit_count {
             let shift = 32 - self.bit_count;
@@ -151,9 +155,9 @@ where
         }
 
         if symbol == self.clear_code {
-            self.on_clear_code();
+            return self.on_clear_code();
         } else if symbol == self.stop_code {
-            self.on_stop_code()?;
+            return self.on_stop_code();
         };
 
         // first iteration
@@ -163,7 +167,7 @@ where
             return self.process_pixel(symbol as u8);
         }
 
-        if symbol > self.table_index {
+        if symbol > self.table_index + 1 {
             return Err(Error::InvalidSymbol);
         }
 
@@ -187,7 +191,9 @@ where
 
             // check for new sybol size
             if self.table_index + 1 == 1 << self.current_symbol_size {
-                self.current_symbol_size += 1;
+                if self.current_symbol_size < 12 {
+                    self.current_symbol_size += 1;
+                }
             }
         }
 
@@ -198,7 +204,7 @@ where
     }
 
     /// resets the decoding tables to achieve higher compression ratios
-    fn on_clear_code(&mut self) {
+    fn on_clear_code(&mut self) -> Result<(), Error> {
         // reset table
         self.current_symbol_size = self.initial_symbol_size;
         self.table_index = self.stop_code;
@@ -206,6 +212,7 @@ where
         // The spec is not clear about this. I assume, the lastSymbol
         // should be refetched on a clear symbol. This seems to work
         self.last_symbol = None;
+        Ok(())
     }
 
     /// end of image. Write rest of data and flush renderer
@@ -271,14 +278,15 @@ where
 
             if entry.first < self.clear_code {
                 self.reverse_buffer[reverse_index] = entry.first as u8;
+                reverse_index += 1;
                 break;
             }
         }
 
         // unwind reverse buffer
         while reverse_index > 0 {
-            self.process_pixel(self.reverse_buffer[reverse_index])?;
             reverse_index -= 1;
+            self.process_pixel(self.reverse_buffer[reverse_index])?;
         }
         Ok(())
     }

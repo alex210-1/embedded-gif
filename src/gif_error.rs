@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum Error {
     FileEnded,
     WrongFiletype,
@@ -9,4 +10,5 @@ pub enum Error {
     InvalidSymbol,
     DecoderAlreadyFinished,
     ReverseBufferOverflow,
+    RenderError,
 }

@@ -13,8 +13,8 @@ pub const OUT_BUF_LEN: usize = 240 * 20; // 20 lines
 pub struct GifFileMetadata {
     width: u16,
     height: u16,
-    global_color_table_size: u8,
-    background_color_index: u8, // TODO implement
+    global_color_table_size: usize,
+    // background_color_index: u8, // TODO implement
     has_global_color_table: bool,
 }
 
@@ -85,7 +85,7 @@ where
         let width = self.next_short()?;
         let height = self.next_short()?;
         let packed_fields = self.next_byte()?;
-        let background_color_index = self.next_byte()?;
+        let _background_color_index = self.next_byte()?;
         self.next_byte()?; // ignore aspect ratio
 
         let has_global_color_table = (packed_fields & 1 << 7) != 0;
@@ -95,13 +95,13 @@ where
         Ok(GifFileMetadata {
             width,
             height,
-            background_color_index,
+            // background_color_index,
             has_global_color_table,
             global_color_table_size,
         })
     }
 
-    fn parse_global_color_table(&mut self, size: u8) -> Result<(), Error> {
+    fn parse_global_color_table(&mut self, size: usize) -> Result<(), Error> {
         for i in 0..size {
             let r = self.next_byte()?;
             let g = self.next_byte()?;
@@ -112,7 +112,7 @@ where
         Ok(())
     }
 
-    fn parse_local_color_table(&mut self, size: u8) -> Result<(), Error> {
+    fn parse_local_color_table(&mut self, size: usize) -> Result<(), Error> {
         for i in 0..size {
             let r = self.next_byte()?;
             let g = self.next_byte()?;
