@@ -30,11 +30,11 @@ pub struct GifDecoder<'a, DS, R> {
     file_metadata: Option<GifFileMetadata>,
     current_frame_metadata: Option<GifFrameMetadata>,
     renderer: &'a mut R,
-    global_color_table: [u16; 256],
-    current_local_color_table: [u16; 256],
-    lzw_table: [LzwEntry; 4096],
-    reverse_buffer: [u8; REVERSE_BUF_LEN],
-    output_buffer: [u8; OUT_BUF_LEN],
+    global_color_table: &'a mut [u16; 256],
+    current_local_color_table: &'a mut [u16; 256],
+    lzw_table: &'a mut [LzwEntry; 4096],
+    reverse_buffer: &'a mut [u8; REVERSE_BUF_LEN],
+    output_buffer: &'a mut [u8; OUT_BUF_LEN],
 }
 
 // TODO the proper way to implement this would be with seperate typestes
@@ -44,18 +44,26 @@ where
     DS: Iterator<Item = u8>,
     R: ImageRenderer,
 {
-    pub fn new(data_source: DS, renderer: &'a mut R) -> Self {
+    /// buffers need to be passed in from outside so that this object still fits on the stack
+    pub fn new(
+        data_source: DS,
+        renderer: &'a mut R,
+        buf_a: &'a mut [u16; 256],
+        buf_b: &'a mut [u16; 256],
+        buf_c: &'a mut [LzwEntry; 4096],
+        buf_d: &'a mut [u8; REVERSE_BUF_LEN],
+        buf_e: &'a mut [u8; OUT_BUF_LEN],
+    ) -> Self {
         GifDecoder {
             data_source,
             file_metadata: None,
             current_frame_metadata: None,
             renderer,
-
-            global_color_table: [0; 256],
-            current_local_color_table: [0; 256],
-            lzw_table: [LzwEntry::default(); 4096],
-            reverse_buffer: [0; REVERSE_BUF_LEN],
-            output_buffer: [0; OUT_BUF_LEN],
+            global_color_table: buf_a,
+            current_local_color_table: buf_b,
+            lzw_table: buf_c,
+            reverse_buffer: buf_d,
+            output_buffer: buf_e,
         }
     }
 
@@ -266,10 +274,10 @@ where
         let mut frame_decoder = FrameDecoder::new(
             &mut self.data_source,
             metadata,
-            color_table,
-            &mut self.lzw_table,
-            &mut self.reverse_buffer,
-            &mut self.output_buffer,
+            *color_table,
+            self.lzw_table,
+            self.reverse_buffer,
+            self.output_buffer,
             self.renderer,
             initial_lzw_size,
         );

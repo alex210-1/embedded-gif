@@ -1,3 +1,5 @@
+use embedded_gif::frame_decoder::LzwEntry;
+use embedded_gif::gif_decoder::{OUT_BUF_LEN, REVERSE_BUF_LEN};
 use embedded_gif::gif_error::Error;
 use embedded_gif::renderer::ImageRenderer;
 use embedded_gif::{frame_decoder::ImageArea, gif_decoder::GifDecoder};
@@ -71,6 +73,14 @@ impl ImageRenderer for TestRenderer {
     }
 }
 
+fn vec_to_boxed_array<T: Copy, const N: usize>(val: T) -> Box<[T; N]> {
+    let boxed_slice = vec![val; N].into_boxed_slice();
+
+    let ptr = Box::into_raw(boxed_slice) as *mut [T; N];
+
+    unsafe { Box::from_raw(ptr) }
+}
+
 #[test]
 fn gif_test() {
     let _ = remove_dir_all("./tests/frames");
@@ -81,7 +91,21 @@ fn gif_test() {
     let data_source = bytes.into_iter();
     let mut renderer = TestRenderer::new();
 
-    let mut decoder = GifDecoder::new(data_source, &mut renderer);
+    let mut buf_a = vec_to_boxed_array::<u16, 256>(0);
+    let mut buf_b = vec_to_boxed_array::<u16, 256>(0);
+    let mut buf_c = vec_to_boxed_array::<LzwEntry, 4096>(LzwEntry::default());
+    let mut buf_d = vec_to_boxed_array::<u8, REVERSE_BUF_LEN>(0);
+    let mut buf_e = vec_to_boxed_array::<u8, OUT_BUF_LEN>(0);
+
+    let mut decoder = GifDecoder::new(
+        data_source,
+        &mut renderer,
+        &mut *buf_a,
+        &mut *buf_b,
+        &mut *buf_c,
+        &mut *buf_d,
+        &mut *buf_e,
+    );
 
     decoder.parse_gif_metadata().unwrap();
 
