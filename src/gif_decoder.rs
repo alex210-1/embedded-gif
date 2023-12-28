@@ -9,6 +9,10 @@ pub const MAX_SIZE: u16 = 360;
 pub const REVERSE_BUF_LEN: usize = 512; // depends on MaxSize
 pub const OUT_BUF_LEN: usize = 240 * 20; // 20 lines
 
+pub trait Rewindable {
+    fn rewind(&mut self) -> Result<(), Error>;
+}
+
 #[derive(Clone)]
 pub struct GifFileMetadata {
     width: u16,
@@ -283,5 +287,15 @@ where
         );
 
         frame_decoder.decode_frame()
+    }
+}
+
+// optional rewind capability of datasource
+impl<'a, DS, R> GifDecoder<'a, DS, R>
+where
+    DS: Rewindable,
+{
+    pub fn rewind(&mut self) -> Result<(), Error> {
+        self.data_source.rewind()
     }
 }
