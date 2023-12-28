@@ -30,7 +30,7 @@ pub struct GifFileMetadata {
 /// Usage: Construct with a data source and a renderer. Call parse_gif_metadata().
 /// Then for each frame call parse_frame_metadata() followed by decode_frame_image().
 pub struct GifDecoder<'a, DS, R> {
-    data_source: DS,
+    data_source: &'a mut DS,
     file_metadata: Option<GifFileMetadata>,
     current_frame_metadata: Option<GifFrameMetadata>,
     renderer: &'a mut R,
@@ -50,7 +50,7 @@ where
 {
     /// buffers need to be passed in from outside so that this object still fits on the stack
     pub fn new(
-        data_source: DS,
+        data_source: &'a mut DS,
         renderer: &'a mut R,
         buf_a: &'a mut [u16; 256],
         buf_b: &'a mut [u16; 256],
@@ -289,7 +289,7 @@ where
         frame_decoder.decode_frame()
     }
 
-    pub fn set_data_source(&mut self, data_source: DS) {
+    pub fn set_data_source(&mut self, data_source: &'a mut DS) {
         self.data_source = data_source;
     }
 }

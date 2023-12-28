@@ -88,7 +88,7 @@ fn gif_test() {
 
     let bytes = read("./tests/gifs/test_large.gif").unwrap();
 
-    let data_source = bytes.into_iter();
+    let mut data_source = bytes.into_iter();
     let mut renderer = TestRenderer::new();
 
     let mut buf_a = vec_to_boxed_array::<u16, 256>(0);
@@ -98,7 +98,7 @@ fn gif_test() {
     let mut buf_e = vec_to_boxed_array::<u8, OUT_BUF_LEN>(0);
 
     let mut decoder = GifDecoder::new(
-        data_source,
+        &mut data_source,
         &mut renderer,
         &mut *buf_a,
         &mut *buf_b,
