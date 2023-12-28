@@ -11,4 +11,5 @@ pub enum Error {
     DecoderAlreadyFinished,
     ReverseBufferOverflow,
     RenderError,
+    RewindError,
 }
