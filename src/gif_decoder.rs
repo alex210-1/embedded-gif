@@ -288,6 +288,10 @@ where
 
         frame_decoder.decode_frame()
     }
+
+    pub fn set_data_source(&mut self, data_source: DS) {
+        self.data_source = data_source;
+    }
 }
 
 // optional rewind capability of datasource
