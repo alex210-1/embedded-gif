@@ -289,8 +289,8 @@ where
         frame_decoder.decode_frame()
     }
 
-    pub fn set_data_source(&mut self, data_source: &'a mut DS) {
-        self.data_source = data_source;
+    pub fn get_data_source(&mut self) -> &mut DS {
+        &mut self.data_source
     }
 }
 
