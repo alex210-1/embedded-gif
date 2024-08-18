@@ -262,7 +262,8 @@ where
     }
 
     pub fn get_current_frame_delay_ms(&self) -> Option<u32> {
-        Some(self.current_frame_metadata?.extension?.millis_delay)
+        let millis_delay = self.current_frame_metadata?.extension?.millis_delay;
+        Some(millis_delay)
     }
 
     /// Decodes and consumes the image data of the frame.
